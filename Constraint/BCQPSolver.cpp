@@ -229,13 +229,31 @@ int BCQPSolver::solveBBPGD(Teuchos::RCP<TV> &xsolRcp, const double tol, const in
         if (alpha < std::numeric_limits<double>::epsilon() * 10) {
             spdlog::critical("BBPGD Stagnate");
             stagFlag = true;
-            break;
+            // print the full solution history
+            for (auto it = history.begin(); it != history.end() - 1; it++) {
+                auto &p = *it;
+                spdlog::critical("RECORD: BCQP history {:g}, {:g}, {:g}, {:g}, {:g}, {:g}", p[0], p[1], p[2], p[3], p[4],
+                                    p[5]);
+            }
+
+            throw std::runtime_error("Constraint solver stagnated.");
         }
 
         // prepare next iteration
         // swap the contents of pointers directly, be careful
         xkm1Rcp.swap(xkRcp);
         gradkm1Rcp.swap(gradkRcp);
+    }
+
+    if (iteCount == iteMax) {
+        spdlog::critical("Constraint solver failed to converge! Printing solution history");
+        // print the full solution history
+        for (auto it = history.begin(); it != history.end() - 1; it++) {
+            auto &p = *it;
+            spdlog::critical("RECORD: BCQP history {:g}, {:g}, {:g}, {:g}, {:g}, {:g}", p[0], p[1], p[2], p[3], p[4],
+                                p[5]);
+        }
+        throw std::runtime_error("Constraint solver failed to converge. \n Try decreasing the timestep size or increasing the maximum number of iterations");
     }
 
     xsolRcp = xkRcp; // return solution
@@ -324,20 +342,19 @@ int BCQPSolver::solveAPGD(Teuchos::RCP<TV> &xsolRcp, const double tol, const int
             }
             // line 10 & 11 of Mazhar, 2015
             Lk *= 2;
-            tk = 1 / Lk;
+            tk = 1.0 / Lk;
 
+            if (tk < std::numeric_limits<double>::epsilon() * 10) {
+                spdlog::critical("APGD Stagnate");
+                stagFlag = true;
+                throw std::runtime_error("Constraint solver stagnated.");
+            }
             // print Lk and tk for debugging
             // std::cout << Lk << " " << tk << std::endl;
 
             // line 12 of Mazhar, 2015
             xkp1Rcp->update(1.0, *ykRcp, -tk, *gVecRcp, 0.0);
             boundProjection(xkp1Rcp);
-        }
-
-        if (tk < std::numeric_limits<double>::epsilon() * 10) {
-            spdlog::critical("APGD Stagnate");
-            stagFlag = true;
-            break;
         }
 
         // line 14-16, Mazhar, 2015
@@ -380,6 +397,18 @@ int BCQPSolver::solveAPGD(Teuchos::RCP<TV> &xsolRcp, const double tol, const int
         xkRcp.swap(xkp1Rcp); // xk=xkp1, xkp1 to be updated;
         thetak = thetakp1;
     }
+
+    if (iteCount == iteMax) {
+        spdlog::critical("Constraint solver failed to converge! Printing solution history");
+        // print the full solution history
+        for (auto it = history.begin(); it != history.end() - 1; it++) {
+            auto &p = *it;
+            spdlog::critical("RECORD: BCQP history {:g}, {:g}, {:g}, {:g}, {:g}, {:g}", p[0], p[1], p[2], p[3], p[4],
+                                p[5]);
+        }
+        throw std::runtime_error("Constraint solver failed to converge. \n Try decreasing the timestep size or increasing the maximum number of iterations");
+    }
+
     xsolRcp = xhatkRcp;
     if (stagFlag) {
         return 1;
@@ -412,7 +441,7 @@ int BCQPSolver::selfTest(double tol, int maxIte, int solverChoice) {
     }
 
     // dump iterative history to csv format
-    if (commRcp->getRank() == 0)
+    if (commRcp->getRank() == 0) {
         for (const auto &record : history) {
             if (solverChoice == 1) {
                 printf("APGD_HISTORY,");
@@ -424,6 +453,7 @@ int BCQPSolver::selfTest(double tol, int maxIte, int solverChoice) {
             }
             printf("\n");
         }
+    }
 
     return 0;
 }
@@ -432,7 +462,7 @@ void BCQPSolver::boundProjection(Teuchos::RCP<TV> &vecRcp) const {
 
     auto vecPtr = vecRcp->getLocalView<Kokkos::HostSpace>(); // LeftLayout
     vecRcp->modify<Kokkos::HostSpace>();
-    const int ibound = vecPtr.dimension_0();
+    const size_t ibound = vecPtr.extent(0);
     const int c = 0; // vecRcp, lbRcp, ubRcp have only 1 column
 
     // project to lb
@@ -450,7 +480,7 @@ void BCQPSolver::boundProjection(Teuchos::RCP<TV> &vecRcp) const {
                                "vec and ub do not have the same Map.");
     auto ubPtr = ubRcp->getLocalView<Kokkos::HostSpace>();
 #pragma omp parallel for
-    for (int i = 0; i < ibound; i++) {
+    for (size_t i = 0; i < ibound; i++) {
         const double temp = vecPtr(i, c);
         vecPtr(i, c) = std::min(temp, ubPtr(i, c));
     }
@@ -467,13 +497,13 @@ double BCQPSolver::checkProjectionResidual(const Teuchos::RCP<const TV> &XRcp, c
     auto ubPtr = ubRcp->getLocalView<Kokkos::HostSpace>(); // LeftLayout
     auto qPtr = QRcp->getLocalView<Kokkos::HostSpace>();   // LeftLayout
     QRcp->modify<Kokkos::HostSpace>();
-    const int ibound = xPtr.dimension_0();
+    const size_t ibound = xPtr.extent(0);
     const int c = 0; // vecRcp, lbRcp, ubRcp have only 1 column
 
     bool projectionError = false;
 // EQ 2.2 of Dai & Fletcher 2005
 #pragma omp parallel for
-    for (int i = 0; i < ibound; i++) {
+    for (size_t i = 0; i < ibound; i++) {
         if (xPtr(i, c) < lbPtr(i, c) + eps) {
             qPtr(i, c) = std::min(yPtr(i, c), 0.0);
         } else if (xPtr(i, c) > ubPtr(i, c) - eps) {
@@ -490,6 +520,7 @@ double BCQPSolver::checkProjectionResidual(const Teuchos::RCP<const TV> &XRcp, c
         dumpTV(XRcp, "XRcp");
         dumpTV(YRcp, "YRcp");
         dumpTV(QRcp, "QRcp");
+        throw std::runtime_error("Projection error occured. Check the dumped vectors.");
         std::exit(1);
     }
 
@@ -520,9 +551,9 @@ void BCQPSolver::generateRandomBounds() {
     auto vec2Ptr = vec2->getLocalView<Kokkos::HostSpace>(); // LeftLayout
     vec1->modify<Kokkos::HostSpace>();
     vec2->modify<Kokkos::HostSpace>();
-    const int ibound = vec1Ptr.dimension_0();
+    const int ibound = vec1Ptr.extent(0);
 #pragma omp parallel for
-    for (int i = 0; i < ibound; i++) {
+    for (size_t i = 0; i < ibound; i++) {
         double a = vec1Ptr(i, 0);
         double b = vec2Ptr(i, 0);
         vec1Ptr(i, 0) = std::min(a, b);

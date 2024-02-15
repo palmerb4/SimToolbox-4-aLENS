@@ -104,7 +104,7 @@ class Sylinder {
      * @param length_
      * @param lengthCollision_
      * @param pos_ if not specified position is set as [0,0,0]
-     * @param orientation_ if not specied orientation is set as identity
+     * @param orientation_ if not specifed, orientation is set as identity
      */
     Sylinder(const int &gid_, const double &radius_, const double &radiusCollision_, const double &length_,
              const double &lengthCollision_, const double pos_[3] = nullptr, const double orientation_[4] = nullptr);
@@ -451,7 +451,7 @@ class Sylinder {
         IOHelper::writeTailVTP(file);
         file.close();
     }
-};
+};  // end of Sylinder class
 
 /**
  * @brief FDPS writeAscii file header

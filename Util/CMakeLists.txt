@@ -25,3 +25,4 @@ target_link_libraries(TRngPool_test PRIVATE OpenMP::OpenMP_CXX MPI::MPI_CXX
 add_test(NAME TRngPool COMMAND TRngPool_test)
 set_tests_properties(TRngPool PROPERTIES PASS_REGULAR_EXPRESSION
                                          "TestPassed;All ok")
+                                         

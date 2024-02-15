@@ -98,10 +98,10 @@ class ConstraintSolver {
     // mobility-map
     Teuchos::RCP<const TMAP> mobMapRcp; ///< distributed map for obj mobility. 6 dof per obj
     Teuchos::RCP<TOP> mobOpRcp;         ///< mobility operator, 6 dof per obj to 6 dof per obj
-    Teuchos::RCP<TV> forceuRcp;   ///< force vec, 6 dof per obj, due to unilateral constraints
-    Teuchos::RCP<TV> forcebRcp;   ///< force vec, 6 dof per obj, due to bilateral constraints
-    Teuchos::RCP<TV> veluRcp;     ///< velocity vec, 6 dof per obj. due to unilateral constraints
-    Teuchos::RCP<TV> velbRcp;     ///< velocity vec, 6 dof per obj. due to bilateral constraints
+    Teuchos::RCP<TV> forceuRcp;         ///< force vec, 6 dof per obj, due to unilateral constraints
+    Teuchos::RCP<TV> forcebRcp;         ///< force vec, 6 dof per obj, due to bilateral constraints
+    Teuchos::RCP<TV> veluRcp;           ///< velocity vec, 6 dof per obj. due to unilateral constraints
+    Teuchos::RCP<TV> velbRcp;           ///< velocity vec, 6 dof per obj. due to bilateral constraints
     Teuchos::RCP<TV> velncRcp;          ///< the non-constraint velocity vel_nc
 
     // composite vectors and operators

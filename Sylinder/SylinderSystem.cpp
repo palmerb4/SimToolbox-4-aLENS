@@ -86,7 +86,7 @@ void SylinderSystem::initialize(const SylinderConfig &runConfig_, const std::str
     }
 
     if (!runConfig.sylinderFixed) {
-        // 100 NON-B steps to resolve initial configuration collisions
+        // 100 NON-Brownian dry-collision steps to resolve initial configuration collisions
         // no output
         spdlog::warn("Initial Collision Resolution Begin");
         for (int i = 0; i < runConfig.initPreSteps; i++) {
@@ -181,7 +181,7 @@ void SylinderSystem::setTreeSylinder() {
     if (nGlobal > 1.5 * treeSylinderNumber || !treeSylinderNearPtr) {
         // a new larger tree
         treeSylinderNearPtr.reset();
-        treeSylinderNearPtr = std::make_unique<TreeSylinderNear>();
+        treeSylinderNearPtr = std::make_shared<TreeSylinderNear>();
         treeSylinderNearPtr->initialize(2 * nGlobal);
         treeSylinderNumber = nGlobal;
     }
@@ -256,6 +256,8 @@ void SylinderSystem::setInitialFromConfig() {
                 Emapq(orientation).coeffs() = orientq.coeffs();
                 sylinderContainer[i] = Sylinder(i, radius, radius, length, length, pos, orientation);
                 sylinderContainer[i].clear();
+                sylinderContainer[i].rank = 0;
+                sylinderContainer[i].globalIndex = i;
             }
         }
     }
@@ -370,6 +372,8 @@ void SylinderSystem::setInitialFromFile(const std::string &filename) {
         for (int i = 0; i < nRead; i++) {
             sylinderContainer[i] = sylinderReadFromFile[i];
             sylinderContainer[i].clear();
+            sylinderContainer[i].globalIndex = i;
+            sylinderContainer[i].rank = 0;
         }
     }
 }
@@ -450,6 +454,8 @@ void SylinderSystem::setInitialFromVTKFile(const std::string &pvtpFileName) {
             posData->GetPoint(i * 2 + 1, rightEndpointPos);
 
             Emap3(sy.pos) = (Emap3(leftEndpointPos) + Emap3(rightEndpointPos)) * 0.5;
+            sy.globalIndex = i;
+            sy.rank = 0;
             sy.gid = gidData->GetComponent(i, 0);
             sy.group = groupData->GetComponent(i, 0);
             sy.isImmovable = isImmovableData->GetTypedComponent(i, 0) > 0 ? true : false;
@@ -526,8 +532,10 @@ void SylinderSystem::writeVTK(const std::string &baseFolder) {
     Sylinder::writeVTP<PS::ParticleSystem<Sylinder>>(sylinderContainer, sylinderContainer.getNumberOfParticleLocal(),
                                                      baseFolder, std::to_string(snapID), rank);
     conCollectorPtr->writeVTP(baseFolder, "", std::to_string(snapID), rank);
+
+     // write parallel head
     if (rank == 0) {
-        Sylinder::writePVTP(baseFolder, std::to_string(snapID), size); // write parallel head
+        Sylinder::writePVTP(baseFolder, std::to_string(snapID), size);
         conCollectorPtr->writePVTP(baseFolder, "", std::to_string(snapID), size);
     }
 }
@@ -619,8 +627,8 @@ void SylinderSystem::exchangeSylinder() {
     updateSylinderRank();
 }
 
-void SylinderSystem::calcMobMatrix() {
-    // diagonal hydro mobility operator
+void SylinderSystem::calcDryMobMatrix() {
+    // diagonal mobility operator
     // 3*3 block for translational + 3*3 block for rotational.
     // 3 nnz per row, 18 nnz per tubule
 
@@ -661,7 +669,7 @@ void SylinderSystem::calcMobMatrix() {
         const double dragRotInv = sy.isImmovable ? 0.0 : 1 / dragRot;
 
         MobTrans = dragParaInv * qq + dragPerpInv * Imqq;
-        MobRot = dragRotInv * qq + dragRotInv * Imqq; // = dragRotInv * Identity
+        MobRot = dragRotInv * qq + dragRotInv * Imqq;
         // MobRot regularized to remove null space.
         // here it becomes identity matrix,
         // no effect on geometric constraints
@@ -709,16 +717,19 @@ void SylinderSystem::calcMobMatrix() {
     }
 
     // mobMat is block-diagonal, so domainMap=rangeMap
-    mobilityMatrixRcp =
+    dryMobilityMatrixRcp =
         Teuchos::rcp(new TCMAT(sylinderMobilityMapRcp, sylinderMobilityMapRcp, rowPointers, columnIndices, values));
-    mobilityMatrixRcp->fillComplete(sylinderMobilityMapRcp, sylinderMobilityMapRcp); // domainMap, rangeMap
+    dryMobilityMatrixRcp->fillComplete(sylinderMobilityMapRcp, sylinderMobilityMapRcp); // domainMap, rangeMap
 
-    spdlog::debug("MobMat Constructed " + mobilityMatrixRcp->description());
+#ifdef DEBUGLCPCOL
+    std::cout << "MobMat Constructed: " << dryMobilityMatrixRcp->description() << std::endl;
+    dumpTCMAT(dryMobilityMatrixRcp, "DryMobMat.mtx");
+#endif
 }
 
 void SylinderSystem::calcMobOperator() {
-    calcMobMatrix();
-    mobilityOperatorRcp = mobilityMatrixRcp;
+        calcDryMobMatrix();
+        mobilityOperatorRcp = dryMobilityMatrixRcp;
 }
 
 void SylinderSystem::calcVelocityNonCon() {
@@ -981,10 +992,10 @@ void SylinderSystem::saveForceVelocityConstraints() {
     auto forceBiPtr = forceBiRcp->getLocalView<Kokkos::HostSpace>();
 
     const int sylinderLocalNumber = sylinderContainer.getNumberOfParticleLocal();
-    TEUCHOS_ASSERT(velUniPtr.dimension_0() == sylinderLocalNumber * 6);
-    TEUCHOS_ASSERT(velUniPtr.dimension_1() == 1);
-    TEUCHOS_ASSERT(velBiPtr.dimension_0() == sylinderLocalNumber * 6);
-    TEUCHOS_ASSERT(velBiPtr.dimension_1() == 1);
+    TEUCHOS_ASSERT(velUniPtr.extent(0) == sylinderLocalNumber * 6);
+    TEUCHOS_ASSERT(velUniPtr.extent(1) == 1);
+    TEUCHOS_ASSERT(velBiPtr.extent(0) == sylinderLocalNumber * 6);
+    TEUCHOS_ASSERT(velBiPtr.extent(1) == 1);
 
 #pragma omp parallel for
     for (int i = 0; i < sylinderLocalNumber; i++) {
@@ -1075,8 +1086,8 @@ void SylinderSystem::calcVelocityBrown() {
     auto velocityPtr = velocityBrownRcp->getLocalView<Kokkos::HostSpace>();
     velocityBrownRcp->modify<Kokkos::HostSpace>();
 
-    TEUCHOS_ASSERT(velocityPtr.dimension_0() == nLocal * 6);
-    TEUCHOS_ASSERT(velocityPtr.dimension_1() == 1);
+    TEUCHOS_ASSERT(velocityPtr.extent(0) == nLocal * 6);
+    TEUCHOS_ASSERT(velocityPtr.extent(1) == 1);
 
 #pragma omp parallel for
     for (int i = 0; i < nLocal; i++) {

@@ -58,8 +58,23 @@ void ConstraintSolver::reset() {
 }
 
 void ConstraintSolver::solveConstraints() {
+    /////////////////////////////////////////////////
+    // Check if there are any constraints to solve //
+    /////////////////////////////////////////////////
+    {
+        const int numLocalConstraints = conCollector.getLocalNumberOfConstraints();
+        int numGlobalConstraints;
+        MPI_Allreduce(&numLocalConstraints, &numGlobalConstraints, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+        if (numGlobalConstraints == 0) {
+            spdlog::info("No constraints to solve. System advances unconstrained");
+            return;
+        } else {
+            spdlog::info("RECORD: Initial global number of constraints {}", numGlobalConstraints);
+        }
+    }
+
     const auto &commRcp = gammaRcp->getMap()->getComm();
-    // solver
     BCQPSolver solver(MOpRcp, qRcp);
     spdlog::debug("solver constructed");
 
@@ -86,11 +101,12 @@ void ConstraintSolver::solveConstraints() {
     for (auto it = history.begin(); it != history.end() - 1; it++) {
         auto &p = *it;
         spdlog::debug("RECORD: BCQP history {:g}, {:g}, {:g}, {:g}, {:g}, {:g}", p[0], p[1], p[2], p[3], p[4] * dt,
-                      p[5]);
+                        p[5]);
     }
 
     auto &p = history.back();
-    spdlog::info("RECORD: BCQP residue {:g}, {:g}, {:g}, {:g}, {:g}, {:g}", p[0], p[1], p[2], p[3], p[4] * dt, p[5]);
+    spdlog::info("RECORD: BCQP residue {:g}, {:g}, {:g}, {:g}, {:g}, {:g}", p[0], p[1], p[2], p[3], p[4] * dt,
+                    p[5]);
 
     // calculate unilateral and bilateral vel/force with solution
     Teuchos::RCP<TCMAT> DMatRcp = MOpRcp->getDMat();

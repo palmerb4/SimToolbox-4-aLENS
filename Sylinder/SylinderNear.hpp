@@ -39,9 +39,11 @@
  */
 struct SylinderNearEP {
   public:
+    int lid;                            ///< local id unique within an mpi rank
     int gid;                            ///< global unique id
     int globalIndex;                    ///< sequentially ordered unique index in sylinder map
     int rank;                           ///< mpi rank of owning rank
+    int group;                          ///< group id    
     double radius;                      ///< radius
     double length;                      ///< length
     double radiusCollision;             ///< collision radius
@@ -76,6 +78,7 @@ struct SylinderNearEP {
         globalIndex = fp.globalIndex;
         rank = fp.rank;
         colBuf = fp.colBuf;
+        group = fp.group;
 
         radius = fp.radius;
         length = fp.length;

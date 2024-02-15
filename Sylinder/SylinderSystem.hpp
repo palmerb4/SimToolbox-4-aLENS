@@ -29,6 +29,7 @@
  *
  */
 class SylinderSystem {
+  public:
     bool enableTimer = false;
     int snapID;                  ///< the current id of the snapshot file to be saved. sequentially numbered from 0
     int stepCount;               ///< timestep Count. sequentially numbered from 0
@@ -39,7 +40,7 @@ class SylinderSystem {
     void setDomainInfo();
 
     PS::ParticleSystem<Sylinder> sylinderContainer;        ///< sylinders
-    std::unique_ptr<TreeSylinderNear> treeSylinderNearPtr; ///< short range interaction of sylinders
+    std::shared_ptr<TreeSylinderNear> treeSylinderNearPtr; ///< short range interaction of sylinders
     int treeSylinderNumber;                                ///< the current max_glb number of treeSylinderNear
     void setTreeSylinder();
 
@@ -66,7 +67,7 @@ class SylinderSystem {
     Teuchos::RCP<const TCOMM> commRcp;         ///< TCOMM, set as a Teuchos::MpiComm object in constrctor
     Teuchos::RCP<TMAP> sylinderMapRcp;         ///< TMAP, contiguous and sequentially ordered 1 dof per sylinder
     Teuchos::RCP<TMAP> sylinderMobilityMapRcp; ///< TMAP, contiguous and sequentially ordered 6 dofs per sylinder
-    Teuchos::RCP<TCMAT> mobilityMatrixRcp;     ///< block-diagonal mobility matrix
+    Teuchos::RCP<TCMAT> dryMobilityMatrixRcp;     ///< block-diagonal dry mobility matrix
     Teuchos::RCP<TOP> mobilityOperatorRcp;     ///< full mobility operator (matrix-free), to be implemented
 
     // Data directory
@@ -169,7 +170,6 @@ class SylinderSystem {
      */
     void updateSylinderRank();
 
-  public:
     SylinderConfig runConfig; ///< system configuration. Be careful if this is modified on the fly
 
     /**
@@ -413,15 +413,14 @@ class SylinderSystem {
     void sumForceVelocity();
 
     /**
-     * @brief calculate the mobility matrix (block diagonal)
+     * @brief calculate the dry, block diagonal mobility matrix 
      *
      */
-    void calcMobMatrix();
+    void calcDryMobMatrix();
 
     /**
-     * @brief calculate the mobility operator (full-dense, matrix-free)
+     * @brief calculate the matrix-free mobility operator 
      *
-     * TODO: to be implemented
      */
     void calcMobOperator();
 
@@ -437,6 +436,11 @@ class SylinderSystem {
      * @return std::shared_ptr<const ZDD<SylinderNearEP>>&
      */
     std::shared_ptr<ZDD<SylinderNearEP>> &getSylinderNearDataDirectory() { return sylinderNearDataDirectoryPtr; }
+
+    /**
+     * @brief Get the sylinder near tree object
+    */
+    std::shared_ptr<TreeSylinderNear> &getTreeSylinderNearPtr() { return treeSylinderNearPtr; }
 
     // resolve constraints
     void collectPairCollision();     ///< collect pair collision constraints
@@ -471,7 +475,7 @@ class SylinderSystem {
     Teuchos::RCP<const TV> getVelocityBi() const { return velocityBiRcp; };
 
     // mobility
-    Teuchos::RCP<TCMAT> getMobMatrix() { return mobilityMatrixRcp; };
+    Teuchos::RCP<TCMAT> getDryMobMatrix() { return dryMobilityMatrixRcp; };
     Teuchos::RCP<TOP> getMobOperator() { return mobilityOperatorRcp; };
 
     // get information

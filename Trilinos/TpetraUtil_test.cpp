@@ -12,12 +12,11 @@ int main(int argc, char **argv) {
         Logger::setup_mpi_spdlog();
         Teuchos::RCP<const TCOMM> commRcp = getMPIWORLDTCOMM();
 
-        std::vector<int> gColIndexOnLocal = {1 + commRcp->getRank(), 3 + commRcp->getRank()};
-        std::vector<int> gRowIndexOnLocal = {commRcp->getRank() + 1};
-
-        Teuchos::RCP<TMAP> rowMapRcp = getTMAPFromLocalSize(1, commRcp);
-        Teuchos::RCP<TMAP> colOpMapRcp = getTMAPFromLocalSize(gColIndexOnLocal.size(), commRcp);
-        Teuchos::RCP<TMAP> colMapRcp = Teuchos::rcp<TMAP>(new TMAP(5, gColIndexOnLocal.data(), 2, 0, commRcp));
+        std::vector<GO> gColIndexOnLocal = {1 + commRcp->getRank(), 3 + commRcp->getRank()};
+        std::vector<GO> gRowIndexOnLocal = {commRcp->getRank() + 1};
+        auto rowMapRcp = getTMAPFromLocalSize(1, commRcp);
+        auto colOpMapRcp = getTMAPFromLocalSize(gColIndexOnLocal.size(), commRcp);
+        auto colMapRcp = Teuchos::rcp<TMAP>(new TMAP(5LL, gColIndexOnLocal.data(), 2, 0, commRcp));
 
         // entries
         Kokkos::View<size_t *> rowPointers("rowPointers", gRowIndexOnLocal.size() + 1);
