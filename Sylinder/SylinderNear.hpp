@@ -109,10 +109,10 @@ struct SylinderNearEP {
      * @return PS::F64
      */
     PS::F64 getRSearch() const {
-        // return std::max(length + 2 * radius, lengthCollision + 2 * lengthCollision) * (1 + colBuf);
-        const double boundingSphereRad = .5 * std::max(length + 2. * radius, lengthCollision + 2. * radiusCollision);
-        const double searchRadius = boundingSphereRad + colBuf;
-        return searchRadius;
+        return std::max(length + 2 * radius, lengthCollision + 2 * lengthCollision) * (1 + colBuf);
+        // const double boundingSphereRad = .5 * std::max(length + 2. * radius, lengthCollision + 2. * radiusCollision);
+        // const double searchRadius = boundingSphereRad + colBuf;
+        // return searchRadius;
     }
 
     /**

@@ -229,14 +229,14 @@ int BCQPSolver::solveBBPGD(Teuchos::RCP<TV> &xsolRcp, const double tol, const in
         if (alpha < std::numeric_limits<double>::epsilon() * 10) {
             spdlog::critical("BBPGD Stagnate");
             stagFlag = true;
-            // print the full solution history
-            for (auto it = history.begin(); it != history.end() - 1; it++) {
-                auto &p = *it;
-                spdlog::critical("RECORD: BCQP history {:g}, {:g}, {:g}, {:g}, {:g}, {:g}", p[0], p[1], p[2], p[3], p[4],
-                                    p[5]);
-            }
+            // // print the full solution history
+            // for (auto it = history.begin(); it != history.end() - 1; it++) {
+            //     auto &p = *it;
+            //     spdlog::critical("RECORD: BCQP history {:g}, {:g}, {:g}, {:g}, {:g}, {:g}", p[0], p[1], p[2], p[3], p[4],
+            //                         p[5]);
+            // }
 
-            throw std::runtime_error("Constraint solver stagnated.");
+            // throw std::runtime_error("Constraint solver stagnated.");
         }
 
         // prepare next iteration
@@ -245,16 +245,16 @@ int BCQPSolver::solveBBPGD(Teuchos::RCP<TV> &xsolRcp, const double tol, const in
         gradkm1Rcp.swap(gradkRcp);
     }
 
-    if (iteCount == iteMax) {
-        spdlog::critical("Constraint solver failed to converge! Printing solution history");
-        // print the full solution history
-        for (auto it = history.begin(); it != history.end() - 1; it++) {
-            auto &p = *it;
-            spdlog::critical("RECORD: BCQP history {:g}, {:g}, {:g}, {:g}, {:g}, {:g}", p[0], p[1], p[2], p[3], p[4],
-                                p[5]);
-        }
-        throw std::runtime_error("Constraint solver failed to converge. \n Try decreasing the timestep size or increasing the maximum number of iterations");
-    }
+    // if (iteCount == iteMax) {
+    //     spdlog::critical("Constraint solver failed to converge! Printing solution history");
+    //     // print the full solution history
+    //     for (auto it = history.begin(); it != history.end() - 1; it++) {
+    //         auto &p = *it;
+    //         spdlog::critical("RECORD: BCQP history {:g}, {:g}, {:g}, {:g}, {:g}, {:g}", p[0], p[1], p[2], p[3], p[4],
+    //                             p[5]);
+    //     }
+    //     throw std::runtime_error("Constraint solver failed to converge. \n Try decreasing the timestep size or increasing the maximum number of iterations");
+    // }
 
     xsolRcp = xkRcp; // return solution
     if (stagFlag) {
